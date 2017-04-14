@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar 20 22:34:21 2017
+
+@author: Agustin'tano' Mattioli
+"""
+
+import imaplib
+import email
+import getpass
+from netmiko import ConnectHandler
+from subprocess import call, check_output
+import os.path
+import sys
+import os
+from crontab import CronTab
+# import re {Esta la tengo para mas adelante, es match de expresiones regulares}
+from smtplib import SMTP_SSL as SMTP
+from email.mime.text import MIMEText
+
+
+class connect(object):
+    def __init__(self):
+        self.user = '/home/'+getpass.getuser()+'/secrets'
+        self.cron = '/home/'+getpass.getuser()+'/cron.tab'
+        self.ordst = '/home/'+getpass.getuser()+'/ordst'
+    
+    def auth(self):
+        if os.path.exists(self.user):
+            secret = open(self.user,'r')
+            creds = secret.readline().split(',')
+            return creds
+        else:
+            secret = open(self.user,'a')
+            print('Como es el primer uso vamos a tomar algunos datos...')
+            new_user = input('Ingresa tu usuario: ')
+            new_pass = input('Ingresa tu password: ')
+            new_secret = input('Ingresa contraseña de enable: ')
+            mailuser = input('Correo electronico origen de las pruebas: ')
+            maildst = input('Correo electronico destino de las pruebas: ')
+            mailpass = input('Password del correo electronico: ')
+            secret.write(new_user)
+            secret.write(',')
+            secret.write(new_pass)
+            secret.write(',')
+            secret.write(new_secret)
+            secret.write(',')
+            secret.write(mailuser)
+            secret.write(',')
+            secret.write(mailpass)
+            secret.write(',')
+            secret.write(maildst)
+            call(["chmod", '400', self.user])
+            secret = open(self.user,'r')
+            creds = secret.readline().split(',')
+            return creds
+    
+    def conn(self,origen,destino,source,pamount):
+        tab = CronTab(getpass.getuser())
+        if usr.imap() == 'borrar':
+            tab.remove_all(comment='Monitoria')
+            tab.write()
+            if os.path.exists(self.ordst):
+                os.remove(self.ordst)
+            if os.path.exists(self.cron):
+                os.remove(self.cron)
+            return 0
+        paquetes = 0
+        self.origen = origen
+        self.destino = destino
+        self.source = source
+        self.pamount = pamount
+        equipo = {
+                  'device_type': 'cisco_ios',
+                  'ip':origen,
+                  'username': self.auth()[0],
+                  'password': self.auth()[1],
+                  'port' : 22,         
+                  'secret': self.auth()[2],     
+                  'verbose': False,
+                  }
+        net_connect = ConnectHandler(**equipo)
+        for x in source.split():
+            if x[0:2] == 'Gi' or x[0:2] == 'Fa' or x[0:2] == 'Po':
+                print('Corriendo ping en el equipo...')
+                output = net_connect.send_command('ping '+ destino + ' repeat ' + pamount + ' source ' + source)
+                for x in output.split()[24]:
+                    if x == '!':
+                        paquetes += 1
+                    else:
+                        paquetes -= 1
+                if paquetes < 0:
+                    paquetes = 0
+            else:
+                output = net_connect.send_command('ping vrf '+ source + ' ' + destino + ' repeat ' + pamount)
+                print('Corriendo ping en el equipo...')
+                for x in output.split()[16]:
+                    if x == '!':
+                        paquetes += 1
+                    else:
+                        paquetes -= 1
+                if paquetes < 0:
+                    paquetes = 0  
+        porc = int(pamount) / paquetes  #Porcentaje de perdida
+        if os.path.exists(self.cron):
+            openlocalcron = open(self.cron, 'r')
+            readcron = str(openlocalcron.readlines())
+            defi = [x for x in readcron.split('/')]
+            for x in defi:
+                if x == "monitoria # Monitoria\\n']":
+                    self.smtp(porc)
+                    return 'Mail de monitoria enviado'
+        else:
+            print('\n', 'recibidos', paquetes, 'de ', pamount)
+            alarmas = input('Necesitas alarmas por mail? S/N: ')
+            if alarmas == 'S' or alarmas == 's' :
+                tiempo = input('Ok, cada cuantos minutos?: ' )
+                loc = check_output('pwd').decode("utf-8")
+                ubicacion = loc
+                cron = tab.new(command= 'python3 ' + ubicacion.rstrip() + '/monitoria', comment='Monitoria')
+                cron.minute.every(tiempo)
+                tab.write()
+                tab.write(self.cron)
+                self.smtp(porc)
+                print('Ok, las alarmas seran envidas a tu mail cada ' + tiempo + ' minutos. Podes cancelarlas contestando ack')
+            else:
+                return 0#print('\n', 'recibidos', paquetes, 'de 10.')
+    
+    def imap(self):
+        user = self.auth()[3]
+        password = self.auth()[4]
+        con=imaplib.IMAP4_SSL('imap.gmail.com')
+        con.login(user,password)
+        con.select("INBOX")
+
+        result, data = con.search(None, "ALL")
+        ids = data[0]
+        id_list = ids.split()
+        latest_email_id = id_list[-1] 
+
+        result,data=con.fetch(latest_email_id, '(RFC822)')
+        raw=email.message_from_bytes(data[0][1])
+
+        if raw.is_multipart():
+            x = [raw.get_payload(0)]         
+            for part in x:
+                if part.get_content_maintype() == 'text':
+                    p = part.get_payload()[0:3]
+                    if p == 'ACK' or p == 'Ack' or p == 'ack':
+                        return 'borrar'
+
+        else:
+            return raw.get_payload(None, True)
+                    
+    def smtp(self, porcentaje):
+        self.porcentaje = porcentaje 
+        SMTPserver = 'smtp.gmail.com'
+        sender =     self.auth()[3]
+        destination = [self.auth()[5]]
+        USERNAME = sender
+        PASSWORD = self.auth()[4]
+        text_subtype = 'plain'
+        if porcentaje == 1:
+            content= '0% de perdida'
+        elif porcentaje > 1 and porcentaje < 3:
+            content= 'Entre 10% y 25% de perdida'
+        elif porcentaje > 3 and porcentaje < 6:
+            content= 'Entre 25% y 60% de perdida'
+        elif porcentaje > 6 and porcentaje < 9:
+            content= 'Enlace completamente degradado'
+        else:
+            content= 'Enlace caido'
+        subject="Prueba de Performance"
+        try:
+            msg = MIMEText(content, text_subtype)
+            msg['Subject']=       subject
+            msg['From']   = sender 
+    
+            conn = SMTP(SMTPserver)
+            conn.set_debuglevel(False)
+            conn.login(USERNAME, PASSWORD)
+            try:
+                conn.sendmail(sender, destination, msg.as_string())
+            finally:
+                conn.quit()
+
+        except Exception as exc:
+            sys.exit( "mail failed; %s" % str(exc) ) 
+
+
+usr = connect()
+ordst = '/home/'+getpass.getuser()+'/ordst'
+cron = '/home/'+getpass.getuser()+'/cron.tab'
+
+def nuevo():
+        usr = connect()
+        ordst = '/home/'+getpass.getuser()+'/ordst'
+        path = open(ordst,'w')
+        origen = input('Equipo de Origen: ')
+        destino = input('IP de Destino: ')
+        pamount = input ('Cantidad de pings: ')
+        equipo = {
+                  'device_type': 'cisco_ios',
+                  'ip':origen,
+                  'username': usr.auth()[0],
+                  'password': usr.auth()[1],
+                  'port' : 22,         
+                  'secret': usr.auth()[2],     
+                  'verbose': False,
+                  }
+        path.write(origen)
+        path.write(',')
+        path.write(destino)
+        path.write(',')
+        esvrf = input ('El origen de la prueba es una VRF? S/N: ')
+        if esvrf == 'S' or esvrf == 's':
+                print('Buscando VRFs en el equipo...')
+                net_connect = ConnectHandler(**equipo)
+                vlist = net_connect.send_command('show vrf')
+                print(vlist)
+                vrf = input('Cual? (introducir el nombre): ')
+                path.write(vrf)
+                path.write(',')
+                path.write(pamount)
+                path = open(ordst,'r')
+                conx = path.readline().split(',')
+                origen = conx[0]
+                destino = conx[1]
+                source = conx[2]
+                pamount = conx[3]
+                usr.conn(origen,destino,source,pamount)
+        else:
+            print('Buscando interfaces disponibles...')
+            net_connect = ConnectHandler(**equipo)
+            interfaces = net_connect.send_command('show interface description')
+            print(interfaces)
+            source = input ('Interface de Origen: ')
+            path.write(source)
+            path.write(',')
+            path.write(pamount)
+            path = open(ordst,'r')
+            conx = path.readline().split(',')
+            origen = conx[0]
+            destino = conx[1]
+            source = conx[2]
+            pamount = conx[3]
+            usr.conn(origen,destino,source,pamount)
+
+
+if os.path.exists(ordst):
+    path = open(ordst,'r')
+    conx = path.readline().split(',')
+    origen = conx[0]
+    destino = conx[1]
+    source = conx[2]
+    pamount = conx[3]
+    equipo = {
+                  'device_type': 'cisco_ios',
+                  'ip':origen,
+                  'username': usr.auth()[0],
+                  'password': usr.auth()[1],
+                  'port' : 22,         
+                  'secret': usr.auth()[2],     
+                  'verbose': False,
+                  }
+
+    if os.path.exists(cron):
+        usr.conn(origen,destino,source,pamount)
+    else:
+        print('\nEn la ultima prueba fueron: ' + pamount + ' paquetes desde ' + origen + ' contra: ' + destino + ' con origen ' + source + '\n')
+        mismo = input('mantener? S/N: ')
+        if mismo == 'S' or mismo == 's':
+            usr.conn(origen,destino,source,pamount)
+        else:
+            nuevo()
+else:
+    nuevo()
+
+
+
+
+
+
+
+
+
+
+    
