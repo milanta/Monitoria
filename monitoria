@@ -81,6 +81,7 @@ class connect(object):
                   'verbose': False,
                   }
         net_connect = ConnectHandler(**equipo)
+        net_connect.enable()
         for x in source.split():
             if x[0:2] == 'Gi' or x[0:2] == 'Fa' or x[0:2] == 'Po':
                 print('Corriendo ping en el equipo...')
@@ -217,6 +218,7 @@ def nuevo():
         if esvrf == 'S' or esvrf == 's':
                 print('Buscando VRFs en el equipo...')
                 net_connect = ConnectHandler(**equipo)
+                net_connect.enable()
                 vlist = net_connect.send_command('show vrf')
                 print(vlist)
                 vrf = input('Cual? (introducir el nombre): ')
@@ -233,6 +235,7 @@ def nuevo():
         else:
             print('Buscando interfaces disponibles...')
             net_connect = ConnectHandler(**equipo)
+            net_connect.enable()
             interfaces = net_connect.send_command('show interface description')
             print(interfaces)
             source = input ('Interface de Origen: ')
