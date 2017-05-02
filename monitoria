@@ -37,7 +37,7 @@ class connect(object):
             print('Como es el primer uso vamos a tomar algunos datos...')
             new_user = input('Ingresa tu usuario: ')
             new_pass = input('Ingresa tu password: ')
-            new_secret = input('Ingresa contraseña de enable: ')
+            new_secret = input('Ingresa contraseña de enable: ', )
             mailuser = input('Correo electronico origen de las pruebas: ')
             maildst = input('Correo electronico destino de las pruebas: ')
             mailpass = input('Password del correo electronico: ')
@@ -84,7 +84,7 @@ class connect(object):
         net_connect = ConnectHandler(**equipo)
         net_connect.enable()
         for x in source.split():
-            if x[0:2] == 'Gi' or x[0:2] == 'Fa' or x[0:2] == 'Po':
+            if x[0:2] == 'Gi' or x[0:2] == 'Fa' or x[0:2] == 'Po' or x[0:1] == 'g' or x[0:1] == 'f' :
                 if opt == 1:
                     print('Corriendo ping en el equipo...')
                     output = net_connect.send_command('ping '+ destino + ' repeat ' + pamount + ' source ' + source)
@@ -95,12 +95,16 @@ class connect(object):
                             paquetes -= 1
                     if paquetes < 0:
                         paquetes = 0
+                        porc = 100
+                    else:
+                        porc = int((paquetes * 100) / int(pamount))
+                
                 elif opt == 2:
                     print('Corriendo trace en el equipo...')
                     output = net_connect.send_command('traceroute '+ destino + ' source ' + source)
                     o1 = output.split('\n')[3::]
                     print('\n'.join(o1))
-                    return 0
+                
             else:
                 if opt == 1:
                     print('Corriendo ping en el equipo...')
@@ -112,20 +116,22 @@ class connect(object):
                             paquetes -= 1
                     if paquetes < 0:
                         paquetes = 0  
-                    porc = int(pamount) / paquetes 
+                        porc = 100
+                    else:
+                        porc = int((paquetes * 100) / int(pamount))
                 elif opt == 2:
                     print('Corriendo trace en el equipo...')
                     output = net_connect.send_command('traceroute vrf ' + source + ' ' + destino)
                     o1 = output.split('\n')[3::]
                     print('\n'.join(o1))
-                    return 0
+                
 
         if os.path.exists(self.cron):
             openlocalcron = open(self.cron, 'r')
             readcron = str(openlocalcron.readlines())
             defi = [x for x in readcron.split('/')]
             for x in defi:
-                if x == "monitoria # Monitoria\\n']":
+                if x == "monitoria -p # Monitoria\\n']":
                     self.smtp(porc)
                     return 'Mail de monitoria enviado'
         else:
@@ -136,12 +142,15 @@ class connect(object):
                     tiempo = input('Ok, cada cuantos minutos?: ' )
                     loc = check_output('pwd').decode("utf-8")
                     ubicacion = loc
-                    cron = tab.new(command= 'python3 ' + ubicacion.rstrip() + '/monitoria', comment='Monitoria')
+                    cron = tab.new(command= 'python3 ' + ubicacion.rstrip() + '/monitoria' + cr ,comment='Monitoria')
                     cron.minute.every(tiempo)
                     tab.write()
                     tab.write(self.cron)
                     self.smtp(porc)
                     print('Ok, las alarmas seran envidas a tu mail cada ' + tiempo + ' minutos. Podes cancelarlas contestando ack')
+                    return 0
+                else:
+                    return 0
             else:
                 return 0
     
@@ -179,13 +188,13 @@ class connect(object):
         USERNAME = sender
         PASSWORD = self.auth()[4]
         text_subtype = 'plain'
-        if porcentaje == 1:
+        if porcentaje == 10:
             content= '0% de perdida'
-        elif porcentaje > 1 and porcentaje < 3:
+        elif porcentaje > 10 and porcentaje < 30:
             content= 'Entre 10% y 25% de perdida'
-        elif porcentaje > 3 and porcentaje < 6:
+        elif porcentaje > 30 and porcentaje < 60:
             content= 'Entre 25% y 60% de perdida'
-        elif porcentaje > 6 and porcentaje < 9:
+        elif porcentaje > 60 and porcentaje < 90:
             content= 'Enlace completamente degradado'
         else:
             content= 'Enlace caido'
@@ -209,12 +218,14 @@ class connect(object):
 
 
 
-def nuevo(opt):
+def nuevo(opt,origen,destino,source):
             usr = connect()
             ordst = '/home/'+getpass.getuser()+'/ordst'
             path = open(ordst,'w')
-            origen = input('Equipo de Origen: ')
-            destino = input('IP de Destino: ')
+            if origen == None:
+                origen = input('Equipo de Origen: ')
+            if destino == None:    
+                destino = input('IP de Destino: ')
             if opt == 1:
                 pamount = input ('Cantidad de pings: ')
             equipo = {
@@ -230,48 +241,53 @@ def nuevo(opt):
             path.write(',')
             path.write(destino)
             path.write(',')
-            esvrf = input ('El origen de la prueba es una VRF? S/N: ')
-            if esvrf == 'S' or esvrf == 's':
-                    print('Buscando VRFs en el equipo...')
+            if source == None:
+                esvrf = input ('El origen de la prueba es una VRF? S/N: ')
+                if esvrf == 'S' or esvrf == 's':
+                            print('Buscando VRFs en el equipo...')
+                            net_connect = ConnectHandler(**equipo)
+                            net_connect.enable()
+                            vlist = net_connect.send_command('show vrf')
+                            print(vlist)
+                            vrf = input('Cual? (introducir el nombre): ')
+                            path.write(vrf)
+                            path.write(',')
+                            path.write(pamount)
+                            path = open(ordst,'r')
+                            conx = path.readline().split(',')
+                            origen = conx[0]
+                            destino = conx[1]
+                            source = conx[2]
+                            pamount = conx[3]
+                else:
+                    print('Buscando interfaces disponibles...')
                     net_connect = ConnectHandler(**equipo)
                     net_connect.enable()
-                    vlist = net_connect.send_command('show vrf')
-                    print(vlist)
-                    vrf = input('Cual? (introducir el nombre): ')
-                    path.write(vrf)
-                    path.write(',')
-                    path.write(pamount)
+                    interfaces = net_connect.send_command('show interface description')
+                    print(interfaces)
+                    source = input ('Interface de Origen: ')
+                    path.write(source)
+                    if opt == 1:
+                        path.write(',')
+                        path.write(pamount)
                     path = open(ordst,'r')
                     conx = path.readline().split(',')
                     origen = conx[0]
                     destino = conx[1]
                     source = conx[2]
-                    pamount = conx[3]
-                    if opt == 1:
-                        usr.conn(origen,destino,source,pamount,opt)
-                    elif opt == 2:
-                        usr.conn(origen,destino,source,None,opt)
-            else:
-                print('Buscando interfaces disponibles...')
-                net_connect = ConnectHandler(**equipo)
-                net_connect.enable()
-                interfaces = net_connect.send_command('show interface description')
-                print(interfaces)
-                source = input ('Interface de Origen: ')
+            elif source != None:
                 path.write(source)
-                if opt == 1:
-                    path.write(',')
-                    path.write(pamount)
+            if opt == 1:
+                path.write(',')
+                path.write(pamount)
                 path = open(ordst,'r')
                 conx = path.readline().split(',')
-                origen = conx[0]
-                destino = conx[1]
-                source = conx[2]
-                if opt == 1:
-                    pamount = conx[3]
-                    usr.conn(origen,destino,source,pamount,opt)
-                elif opt == 2:
-                    usr.conn(origen,destino,source,None,opt)
+                pamount = conx[3]
+                usr.conn(origen,destino,source,pamount,opt)
+                return
+            elif opt == 2:
+                usr.conn(origen,destino,source,None,opt)
+                return
 
 
 usr = connect()
@@ -281,29 +297,90 @@ cron = '/home/'+getpass.getuser()+'/cron.tab'
 parser = argparse.ArgumentParser(description="Performance Monitoring Suite by Tano Mattioli")
 parser.add_argument('-p', help="Ejecuta un ping en el equipo remoto", action='store_true')
 parser.add_argument('-t', help="Ejecuta una traza en el equipo remoto", action='store_true')
+parser.add_argument('-o', type=str, help="Equipo de origen", required=False)
+parser.add_argument('-d', type=str, help="Equipo de destino", required=False)
+parser.add_argument('-i', type=str, help="Interfaz de origen", required=False)
+
+
+
 cmdargs = parser.parse_args()
 
-if cmdargs.p or cmdargs.t:
-    if cmdargs.p:
-        opt = 1
-    elif cmdargs.t:
-        opt = 2
 
-    if os.path.exists(ordst):
-        path = open(ordst,'r')
-        conx = path.readline().split(',')
-        if len(conx) == 4 and opt == 2:
-            print('La ultima prueba fue un ping, vamos a remover el origen y destino')
-            nuevo(2)
-        elif len(conx) == 3 and opt == 1:
-            print('La ultima prueba fue una traza, vamos a remover el origen y destino')
-            nuevo(1)
-        origen = conx[0]
-        destino = conx[1]
-        source = conx[2]
-        if opt == 1:
-            pamount = conx[3]
-        equipo = {
+while 1:
+    
+    if cmdargs.p or cmdargs.t:
+        if cmdargs.p:
+            opt = 1
+            init = None
+            cr = ' -p'
+        elif cmdargs.t:
+            opt = 2
+            init = None
+            cr = ' -t'
+        if cmdargs.o:
+            origen = cmdargs.o
+            if not os.path.exists(cron):
+                init = nuevo(opt,origen,None,None)
+                break
+        elif cmdargs.d:
+            destino = cmdargs.d
+            if not os.path.exists(cron):
+                init = nuevo(opt,None,destino,None)
+                break
+        elif cmdargs.i:
+            source = cmdargs.i
+            if not os.path.exists(cron):
+                init = nuevo(opt,None,None,source)
+                break
+        '''    
+        NOTA:
+            
+        De momento esto queda comentado. No logro hacer que el parser tome mas de un parametro :(
+        Queda como recordatorio molesto para verificarlo mas adelante.
+        
+        elif (cmdargs.p or cmdargs.t) and (cmdargs.o and cmdargs.d):
+            print('yesh')
+            origen = cmdargs.o
+            destino = cmdargs.d
+            init = nuevo(opt,origen,destino,None)
+            cr = ' -o ' + origen + ' -d ' + destino
+        elif cmdargs.o and cmdargs.i:
+            origen = cmdargs.o
+            source = cmdargs.i
+            init = nuevo(opt,origen,None,source)
+            cr = ' -o ' + origen + ' -s ' + source
+        elif (cmdargs.p or cmdargs.t) and (cmdargs.d and cmdargs.i) or (cmdargs.i and cmdargs.d):
+            destino = cmdargs.d
+            source = cmdargs.i
+            init = nuevo(opt,None,destino,source)
+            cr = ' -d ' + destino + ' -i ' + source
+        elif cmdargs.o and cmdargs.d and cmdargs.i:
+            origen = cmdargs.o
+            source = cmdargs.i
+            destino = cmdargs.d
+            init = nuevo(opt,origen,destino,source)
+            cr = ' -o ' + origen + ' -d ' + destino + ' -s ' + source
+        '''
+
+        if os.path.exists(ordst):
+            path = open(ordst,'r')
+            conx = path.readline().split(',')
+            if len(conx) == 4 and opt == 2:
+                print('La ultima prueba fue un ping, vamos a remover el origen y destino')
+                nuevo(2,None,None,None)
+                break
+            elif len(conx) == 3 and opt == 1:
+                print('La ultima prueba fue una traza, vamos a remover el origen y destino')
+                nuevo(1,None,None,None)
+                break
+            elif len(conx) <= 2:
+                nuevo(opt,None,None,None)
+            origen = conx[0]
+            destino = conx[1]
+            source = conx[2]
+            if opt == 1:
+                pamount = conx[3]
+            equipo = {
                       'device_type': 'cisco_ios',
                       'ip':origen,
                       'username': usr.auth()[0],
@@ -313,28 +390,46 @@ if cmdargs.p or cmdargs.t:
                       'verbose': False,
                       }
 
-        if os.path.exists(cron) and opt == 1:
-            usr.conn(origen,destino,source,pamount)
-        else:
-            if opt == 1:
-                print('\nEn la ultima prueba fueron: ' + pamount + ' paquetes desde ' + origen + ' contra: ' + destino + ' con origen ' + source + '\n')
-                mismo = input('mantener? S/N: ')
-                if mismo == 'S' or mismo == 's':
-                    usr.conn(origen,destino,source,pamount,opt)
-            elif opt == 2:
-                print('\nLa ultima prueba fue una traza desde: ' + origen + ' contra: ' + destino + ' con origen ' + source + '\n')
-                mismo = input('mantener? S/N: ')
-                if mismo == 'S' or mismo == 's':
-                    usr.conn(origen,destino,source,None,opt)
+            if os.path.exists(cron) and opt == 1:
+                usr.conn(origen,destino,source,pamount,opt)
+                break
             else:
-                nuevo(opt)
+                if opt == 1:
+                    print('\nEn la ultima prueba fueron: ' + pamount + ' paquetes desde ' + origen + ' contra: ' + destino + ' con origen ' + source + '\n')
+                    mismo = input('mantener? S/N: ')
+                    if mismo == 'S' or mismo == 's':
+                        usr.conn(origen,destino,source,pamount,opt)
+                        break
+                    else:
+                        if init:
+                            init
+                            break
+                        nuevo(opt,None,None,None) 
+                        break
+                elif opt == 2:
+                    print('\nLa ultima prueba fue una traza desde: ' + origen + ' contra: ' + destino + ' con origen ' + source + '\n')
+                    mismo = input('mantener? S/N: ')
+                    if mismo == 'S' or mismo == 's':
+                        usr.conn(origen,destino,source,None,opt)
+                        break
+                    else:
+                        if init:
+                            init
+                            break
+                        nuevo(opt,None,None,None)
+                        break
+                else:
+                    nuevo(opt,None,None,None)
+                    break
+        else:
+            if init:
+                init
+                break
+            nuevo(opt,None,None,None) 
+            break
     else:
-        nuevo(opt)
-
-
-
-
-
+        print("\n" + "Error :( " + "\n" + "Las opciones -p (si es un ping) o -t (si es una traza) son mandatorias. RTFM --> './monitoria -h' :D " + "\n")
+        break
 
 
 
