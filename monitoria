@@ -95,7 +95,7 @@ class connect(object):
                             paquetes -= 1
                     if paquetes < 0:
                         paquetes = 0
-                        porc = 100
+                        porc = 0
                     else:
                         porc = int((paquetes * 100) / int(pamount))
                 
@@ -188,13 +188,13 @@ class connect(object):
         USERNAME = sender
         PASSWORD = self.auth()[4]
         text_subtype = 'plain'
-        if porcentaje == 10:
+        if porcentaje == 100:
             content= '0% de perdida'
-        elif porcentaje > 10 and porcentaje < 30:
+        elif porcentaje > 60 and porcentaje < 90:
             content= 'Entre 10% y 25% de perdida'
         elif porcentaje > 30 and porcentaje < 60:
             content= 'Entre 25% y 60% de perdida'
-        elif porcentaje > 60 and porcentaje < 90:
+        elif porcentaje > 10 and porcentaje < 30:
             content= 'Enlace completamente degradado'
         else:
             content= 'Enlace caido'
@@ -214,8 +214,6 @@ class connect(object):
 
         except Exception as exc:
             sys.exit( "mail failed; %s" % str(exc) ) 
-
-
 
 
 def nuevo(opt,origen,destino,source):
