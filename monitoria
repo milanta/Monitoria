@@ -249,14 +249,6 @@ def nuevo(opt,origen,destino,source):
                             print(vlist)
                             vrf = input('Cual? (introducir el nombre): ')
                             path.write(vrf)
-                            path.write(',')
-                            path.write(pamount)
-                            path = open(ordst,'r')
-                            conx = path.readline().split(',')
-                            origen = conx[0]
-                            destino = conx[1]
-                            source = conx[2]
-                            pamount = conx[3]
                 else:
                     print('Buscando interfaces disponibles...')
                     net_connect = ConnectHandler(**equipo)
@@ -265,14 +257,6 @@ def nuevo(opt,origen,destino,source):
                     print(interfaces)
                     source = input ('Interface de Origen: ')
                     path.write(source)
-                    if opt == 1:
-                        path.write(',')
-                        path.write(pamount)
-                    path = open(ordst,'r')
-                    conx = path.readline().split(',')
-                    origen = conx[0]
-                    destino = conx[1]
-                    source = conx[2]
             elif source != None:
                 path.write(source)
             if opt == 1:
@@ -280,10 +264,18 @@ def nuevo(opt,origen,destino,source):
                 path.write(pamount)
                 path = open(ordst,'r')
                 conx = path.readline().split(',')
+                origen = conx[0]
+                destino = conx[1]
+                source = conx[2]
                 pamount = conx[3]
                 usr.conn(origen,destino,source,pamount,opt)
                 return
             elif opt == 2:
+                path = open(ordst,'r')
+                conx = path.readline().split(',')
+                origen = conx[0]
+                destino = conx[1]
+                source = conx[2]
                 usr.conn(origen,destino,source,None,opt)
                 return
 
@@ -423,14 +415,9 @@ while 1:
             if init:
                 init
                 break
-            nuevo(opt,None,None,None) 
-            break
+            else:
+                nuevo(opt,None,None,None) 
+                break
     else:
         print("\n" + "Error :( " + "\n" + "Las opciones -p (si es un ping) o -t (si es una traza) son mandatorias. RTFM --> './monitoria -h' :D " + "\n")
         break
-
-
-
-
-
-    
